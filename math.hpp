@@ -319,6 +319,17 @@ struct m4 {
         return result;
     }
 
+    static m4 Scale(v3 scale){
+        m4 result;
+
+        result.rows[0] = v4(scale.x, 0, 0, 0);
+        result.rows[1] = v4(0, scale.y, 0, 0);
+        result.rows[2] = v4(0, 0, scale.z, 0);
+        result.rows[3] = v4(0, 0, 0, 1);
+
+        return result;
+    }
+
     m4 operator*(m4 n) {
         m4 result = {};
 

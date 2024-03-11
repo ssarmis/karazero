@@ -13,6 +13,7 @@
 #include "stb_image.h"
 
 class Material;
+class BitmapCube;
 
 struct Viewport {
     static r32 width;
@@ -97,12 +98,16 @@ struct Bitmap {
     i32 height;
     u8* data;
     r32* depthBuffer;
+    
     r32 fov;
     r32 near;
     r32 far;
     r32 aspectRatio;
+    
     m4 modelTransform;
     m4 viewTransform;
+
+    BitmapCube* environment;
 
     static Bitmap LoadFromFile(const std::string& path) {
         Bitmap bitmap;
@@ -239,7 +244,8 @@ struct Bitmap {
         Line(v2(p0.x, p0.y), v2(p1.x, p1.y), c);
     }
 
-    void TriangleNDC(VertexOutput v0, VertexOutput v1, VertexOutput v2, Material* material){
+
+void TriangleNDC(VertexOutput v0, VertexOutput v1, VertexOutput v2, Material* material){
         v3 p0 = v3(v0.p.x, v0.p.y, v0.p.z);
         v3 p1 = v3(v1.p.x, v1.p.y, v1.p.z);
         v3 p2 = v3(v2.p.x, v2.p.y, v2.p.z);
@@ -295,6 +301,62 @@ struct Bitmap {
         }
     }
 
+    void TriangleNDCPBR(VertexOutput v0, VertexOutput v1, VertexOutput v2, Material* material){
+        v3 p0 = v3(v0.p.x, v0.p.y, v0.p.z);
+        v3 p1 = v3(v1.p.x, v1.p.y, v1.p.z);
+        v3 p2 = v3(v2.p.x, v2.p.y, v2.p.z);
+
+        p0 = Math::NDCToSC(p0, Viewport::width, Viewport::height); 
+        p1 = Math::NDCToSC(p1, Viewport::width, Viewport::height); 
+        p2 = Math::NDCToSC(p2, Viewport::width, Viewport::height); 
+
+        v3 min = v3::Min(p0, v3::Min(p1, p2));
+        v3 max = v3::Max(p0, v3::Max(p1, p2));
+
+        v3 e0 = p1 - p0;
+        v3 e1 = p2 - p0;
+
+        for(int y = min.y; y <= max.y; ++y){
+            if(y < 0 || y >= height) {
+                continue;
+            }
+            for(int x = min.x; x <= max.x; ++x){
+                if(x < 0 || x >= width) {
+                    continue;
+                }
+                v3 sp(x, y, 0);
+                if(PointInTriangle(sp, p0, p1, p2)){
+                    v3 e2 = sp - p0;
+
+                    // barycentric        
+                    r32 d00 = Math::Dot(e0, e0);
+                    r32 d01 = Math::Dot(e0, e1);
+                    r32 d11 = Math::Dot(e1, e1);
+                    r32 d20 = Math::Dot(e2, e0);
+                    r32 d21 = Math::Dot(e2, e1);
+                    r32 denom = d00 * d11 - d01 * d01;
+
+                    r32 v = (d11 * d20 - d01 * d21) / denom;
+                    r32 w = (d00 * d21 - d01 * d20) / denom;
+                    r32 u = 1.0f - v - w;
+
+                    r32 z = u * p0.z + v * p1.z + w * p2.z;
+                    r32 depthValue = z;
+                    if(depthValue > depthBuffer[x + y * width]){
+                        continue;
+                    }
+                    depthBuffer[x + y * width] = depthValue;
+
+                    VertexOutput vo = VertexOutput::InterpolateBarycentric(v0, v1, v2, u, v, w);
+
+                    v4 color = FragmentFunctionPBR(vo, material);
+                    SetPixel(x, y, color);
+                    //SetPixel(x, y, v4(depthValue, depthValue, depthValue, 1));
+                }
+            }
+        }
+    }
+
     void InitializePerspective(r32 pfov, r32 pnear, r32 pfar){
         fov = pfov;
         near = pnear;
@@ -332,6 +394,56 @@ struct Bitmap {
     std::list<FaceOutput> facesToBeClipped;
     std::vector<FaceOutput> clippedFaces;
 
+    void DrawTrianglesPBR(const std::vector<Vertex>& vertices, const std::vector<u32>& indices, Material* material){
+        assert(indices.size() % 3 == 0);
+        
+        faceToProcess.clear();
+        facesToBeClipped.clear();
+        clippedFaces.clear();
+
+        for(int i = 0; i < indices.size(); i += 3){
+            Face f = {};
+            f.v0 = vertices[indices[i + 0]];
+            f.v1 = vertices[indices[i + 1]];
+            f.v2 = vertices[indices[i + 2]];
+            faceToProcess.push_back(f);
+        }
+
+        for(auto& face : faceToProcess){
+            VertexOutput vo0 = VertexFunctionPBR(face.v0);
+            VertexOutput vo1 = VertexFunctionPBR(face.v1);
+            VertexOutput vo2 = VertexFunctionPBR(face.v2);
+
+            FaceOutput fo  = {vo0, vo1, vo2};
+
+            facesToBeClipped.push_back(fo);
+        }
+
+
+        r32 xc = 0;
+        r32 clipSize = 1;
+        while(!facesToBeClipped.empty()){
+            FaceOutput& face = facesToBeClipped.front();
+
+            bool n = Clip(face, facesToBeClipped, v4(0, 0, 0, near), v4(0, 0, 1, 0));
+            if(!n){
+                clippedFaces.push_back(face);
+            }
+
+            facesToBeClipped.pop_front();
+        }
+        //std::cout << clippedFaces.size() << std::endl;
+        for(auto& face : clippedFaces){
+            // clip coordinates to NDC
+            face.v0.p = v4(face.v0.p.x / face.v0.p.w, face.v0.p.y / face.v0.p.w, face.v0.p.z / face.v0.p.w, face.v0.p.w);
+            face.v1.p = v4(face.v1.p.x / face.v1.p.w, face.v1.p.y / face.v1.p.w, face.v1.p.z / face.v1.p.w, face.v1.p.w);
+            face.v2.p = v4(face.v2.p.x / face.v2.p.w, face.v2.p.y / face.v2.p.w, face.v2.p.z / face.v2.p.w, face.v2.p.w);
+
+            TriangleNDCPBR(face.v0, face.v1, face.v2, material);
+            //TriangleWireframeNDC(face.v0, face.v1, face.v2, v4(1, 1, 1, 1));
+        }
+    }
+
     void DrawTriangles(const std::vector<Vertex>& vertices, const std::vector<u32>& indices, Material* material){
         assert(indices.size() % 3 == 0);
         
@@ -348,9 +460,9 @@ struct Bitmap {
         }
 
         for(auto& face : faceToProcess){
-            VertexOutput vo0 = VertexFunction(face.v0);
-            VertexOutput vo1 = VertexFunction(face.v1);
-            VertexOutput vo2 = VertexFunction(face.v2);
+            VertexOutput vo0 = VertexFunctionPBR(face.v0);
+            VertexOutput vo1 = VertexFunctionPBR(face.v1);
+            VertexOutput vo2 = VertexFunctionPBR(face.v2);
 
             FaceOutput fo  = {vo0, vo1, vo2};
 
@@ -398,10 +510,15 @@ struct Bitmap {
 
     r32 time;
 
-    VertexOutput VertexFunction(Vertex v);
     v4 sampleSubpixel(v2 uv, Bitmap* texture);
     v4 sample(v2 uv, Bitmap * texture);
+    v4 sampleCube(v3 vector, BitmapCube* cube);
+
+    VertexOutput VertexFunction(Vertex v);
     v4 FragmentFunction(VertexOutput & o, Material * material);
+
+    VertexOutput VertexFunctionPBR(Vertex v);
+    v4 FragmentFunctionPBR(VertexOutput & o, Material * material);
 
 
     v4 GetPixel(int x, int y){
@@ -426,111 +543,6 @@ struct Bitmap {
         return v4(r, g, b, a);
     }
 
-#if 0
-    void Rect(v2 p, v2 s, r32 r, v4 c, Bitmap* texture=nullptr){
-        v2 p0(-0.5, -0.5);
-        v2 p1(0.5, -0.5);
-        v2 p2(0.5, 0.5);
-        v2 p3(-0.5, 0.5);
-
-        p0 = p0 * s;
-        p1 = p1 * s;
-        p2 = p2 * s;
-        p3 = p3 * s;
-
-        m3 rotation = m3::Rotation(r);
-
-        p0 = rotation * (p0) + p;
-        p1 = rotation * (p1) + p;
-        p2 = rotation * (p2) + p;
-        p3 = rotation * (p3) + p;
-
-        Rect(p0, p1, p2, p3, c, texture);
-    }
-
-    void Rect(v2 p0, v2 p1, v2 p2, v2 p3, v4 c, Bitmap* texture){
-        v2 min = v2::Min(p0, v2::Min(p1, v2::Min(p2, p3)));
-        v2 max = v2::Max(p0, v2::Max(p1, v2::Max(p2, p3)));
-
-        // Edges must be Clockwise
-        v2 xa = p2 - p3;
-        v2 ya = p0 - p3;
-        
-        r32 xal = xa.Length();
-        r32 yal = ya.Length();
-
-        v2 xan = xa.Normalized();
-        v2 yan = ya.Normalized();
-
-        // we can use the xan and yan vectors as normals for the others        
-
-        for(int y = min.y; y <= max.y; ++y){
-            for(int x = min.x; x <= max.x; ++x){
-                v2 sp(x, y);
-
-                bool t = Math::Dot(sp - p0, -yan) >= 0;
-                bool b = Math::Dot(sp - p3, yan) >= 0;
-                bool l = Math::Dot(sp - p3, xan) >= 0;
-                bool r = Math::Dot(sp - p1, -xan) >= 0;
-
-                if(t && b && l && r){
-                    if(texture){
-                        v2 tp = sp - p3;
-
-                        r32 u = Math::Dot(tp, xan) / xal;
-                        r32 v = Math::Dot(tp, yan) / yal;
-
-                        r32 tx = u * (texture->width - 2);
-                        r32 ty = v * (texture->height - 2);
-                        
-                        i32 texelX = tx;
-                        i32 texelY = ty;
-
-                        r32 fu = tx - texelX;
-                        r32 fv = ty - texelY;
-
-                        v4 pc0 = texture->GetPixel(texelX, texelY);
-                        v4 pc1 = texture->GetPixel(texelX + 1, texelY);
-                        v4 pc2 = texture->GetPixel(texelX + 1, texelY + 1);
-                        v4 pc3 = texture->GetPixel(texelX, texelY + 1);
-
-                        v4 pc = v4::Lerp(v4::Lerp(pc0, pc1, fu), v4::Lerp(pc3, pc2, fu), fv);
-                        
-                        v4 fc = c * pc;
-                        v4 bc = GetPixelABGRToARGB(x, y);
-
-                        v4 blendedColor = v4::Lerp(fc, bc, 1 - fc.w);
-
-                        SetPixel(x, y, blendedColor);
-                    } else {
-                        SetPixel(x, y, c);
-                    }
-                }
-            }
-        }
-    }
-#endif
-#if 0
-    void Line(v2 a, v2 b, v4 color){
-        v2 ab = b - a;
-        int steps = ab.Length();
-        ab = ab.Normalized();
-
-        r32 px = a.x;
-        r32 py = a.y;
-        
-        while(steps--){
-            px += ab.x;
-            py += ab.y;
-
-            int ipx = std::ceil(px);
-            int ipy = std::ceil(py);
-
-            SetPixel(ipx, ipy, color);
-        }
-        SetPixel(b.x, b.y, color);
-    }
-#else
     void Line (v2 a, v2 b, v4 color){
         v2 ab = b - a;
         int steps = ab.Length();
@@ -554,7 +566,6 @@ struct Bitmap {
             SetPixel(roundedPixelX, roundedPixelY, color);
         }
     }
-#endif
 
     void Line(v3 a, v3 b, v4 color){
         v2 aa(a.x, a.y);

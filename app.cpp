@@ -12,6 +12,7 @@
 
 #include "objloader.hpp"
 #include "material.hpp"
+#include "bitmap_cube.hpp"
 
 r32 Viewport::width;
 r32 Viewport::height;
@@ -32,7 +33,7 @@ int main() {
     bitmap.width = Viewport::width;
     bitmap.height = Viewport::height;
     bitmap.depthBuffer = new r32[bitmap.width * bitmap.height];
-    bitmap.InitializePerspective(90, 0.1f, 100.0f);
+    bitmap.InitializePerspective(20, 0.1f, 100.0f);
     for (int i = 0; i < bitmap.width * bitmap.height; ++i) {
         bitmap.depthBuffer[i] = 1;
     }
@@ -49,35 +50,74 @@ int main() {
     material.roughness = Bitmap::LoadFromFile("models/textures/DefaultMaterial_Roughness.jpeg");
     material.emissive = Bitmap::LoadFromFile("models/textures/DefaultMaterial_Emissive.jpeg");
     material.ambientOcclusion = Bitmap::LoadFromFile("models/textures/DefaultMaterial_Mixed_AO.jpeg");
+ 
+    std::vector<Vertex> verticesFloor = {
+        Vertex(v3(-1, 0, 1), v2(0, 0), v3(0, 1, 0), v3(1, 1, 1)),
+        Vertex(v3(1, 0, 0), v2(1, 1), v3(0, 1, 0), v3(1, 1, 1)),
+        Vertex(v3(-1, 0, 0), v2(0, 1), v3(0, 1, 0), v3(1, 1, 1)),
+        Vertex(v3(1, 0, 1), v2(1, 0), v3(0, 1, 0), v3(1, 1, 1))
+    };
+    std::vector<u32> indicesFloor = {0, 1, 2, 0, 3, 1};
+    Material materialFloor;
+    materialFloor.diffuse = Bitmap::LoadFromFile("models/textures/internal_ground_ao_texture.jpeg");
 
+    BitmapCube* environment = new BitmapCube();
+    environment->directions[0] = Bitmap::LoadFromFile("models/NissiBeach2/posx.jpg");
+    environment->directions[1] = Bitmap::LoadFromFile("models/NissiBeach2/negx.jpg");
+    environment->directions[2] = Bitmap::LoadFromFile("models/NissiBeach2/posy.jpg");
+    environment->directions[3] = Bitmap::LoadFromFile("models/NissiBeach2/negy.jpg");
+    environment->directions[4] = Bitmap::LoadFromFile("models/NissiBeach2/posz.jpg");
+    environment->directions[5] = Bitmap::LoadFromFile("models/NissiBeach2/negz.jpg");
+
+    bitmap.environment = environment;
+
+    bool keys[322];  // 322 is the number of SDLK_DOWN events
     r32 time = 0;
+    r32 offset = 0.6;
     bool done = false;
     SDL_Event event;
     while (!done) {
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
-            case SDL_QUIT: {
-                done = true;
-                break;
-            }
+                case SDL_QUIT: {
+                    done = true;
+                    break;
+                }
+                case SDL_KEYDOWN:{
+                    keys[event.key.keysym.sym] = true;
+                    break;
+                }
+                case SDL_KEYUP:{
+                    keys[event.key.keysym.sym] = false;
+                    break;
+                }
             }
         }
-
+        if(keys[SDLK_s]){
+            offset += 0.1;
+        }
+        if(keys[SDLK_w]){
+            offset -= 0.1;
+        }
         int pitch = 0;
         SDL_LockTexture(screenTexture, nullptr, (void**)(&bitmap.data), &pitch);
 
-        bitmap.Clear(v3(0.9, 0.9, 0.9));
-        time += 0.01;
-
-        m4 t0 = m4::Translation(v3(0, -0.2, 0.6));
-        m4 r0 = m4::Rotation(time, Axis::Y);
+        bitmap.Clear(v3(1, 1, 1));
+        time += 0.1;
+        m4 t0 = m4::Translation(v3(0, -0.2, offset + 0.6));
+        m4 r0 = m4::Rotation(0, Axis::Y);
         m4 ct0 = m4::Translation(v3(0, 0, 0));
 
         bitmap.SetViewTransform(ct0);
         bitmap.SetModelTransform(t0 * r0);
 
         bitmap.time = time;
-        bitmap.DrawTriangles(vertices, indices, &material);
+        bitmap.DrawTrianglesPBR(vertices, indices, &material);
+
+        m4 tf0 = m4::Translation(v3(0, -0.2, offset));
+        m4 sf0 = m4::Scale(v3(0.9, 1, 1));
+        bitmap.SetModelTransform((sf0 * tf0) * r0);
+        bitmap.DrawTriangles(verticesFloor, indicesFloor, &materialFloor);
 
         SDL_UnlockTexture(screenTexture);
 
