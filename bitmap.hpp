@@ -432,7 +432,7 @@ void TriangleNDC(VertexOutput v0, VertexOutput v1, VertexOutput v2, Material* ma
 
             facesToBeClipped.pop_front();
         }
-        //std::cout << clippedFaces.size() << std::endl;
+
         for(auto& face : clippedFaces){
             // clip coordinates to NDC
             face.v0.p = v4(face.v0.p.x / face.v0.p.w, face.v0.p.y / face.v0.p.w, face.v0.p.z / face.v0.p.w, face.v0.p.w);

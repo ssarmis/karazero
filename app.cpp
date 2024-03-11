@@ -71,9 +71,10 @@ int main() {
 
     bitmap.environment = environment;
 
-    bool keys[322];  // 322 is the number of SDLK_DOWN events
+    bool keys[322] = {false};  // 322 is the number of SDLK_DOWN events
     r32 time = 0;
-    r32 offset = 0.6;
+    r32 cameraRotation = -30;
+    v3 cameraPosition(-0.3, 0, 0.5);
     bool done = false;
     SDL_Event event;
     while (!done) {
@@ -94,30 +95,44 @@ int main() {
             }
         }
         if(keys[SDLK_s]){
-            offset += 0.1;
+            cameraPosition.z += 0.1;
         }
         if(keys[SDLK_w]){
-            offset -= 0.1;
+            cameraPosition.z -= 0.1;
+        }
+        if (keys[SDLK_a]) {
+            cameraPosition.x += 0.1;
+        }
+        if (keys[SDLK_d]) {
+            cameraPosition.x -= 0.1;
+        }
+        if (keys[SDLK_q]) {
+            cameraRotation += 1;
+        }
+        if (keys[SDLK_e]) {
+            cameraRotation -= 1;
         }
         int pitch = 0;
         SDL_LockTexture(screenTexture, nullptr, (void**)(&bitmap.data), &pitch);
 
-        bitmap.Clear(v3(1, 1, 1));
+        bitmap.Clear(v3(0, 0, 0));
         time += 0.1;
-        m4 t0 = m4::Translation(v3(0, -0.2, offset + 0.6));
-        m4 r0 = m4::Rotation(0, Axis::Y);
-        m4 ct0 = m4::Translation(v3(0, 0, 0));
+        m4 t0 = m4::Translation(v3(0, -0.2, 0.6));
+        m4 r0 = m4::Rotation(time * 0.09, Axis::Y);
 
-        bitmap.SetViewTransform(ct0);
+        m4 ct0 = m4::Translation(cameraPosition);
+        m4 cr0 = m4::Rotation(cameraRotation, Axis::Y);
+
+        bitmap.SetViewTransform(ct0 * cr0);
         bitmap.SetModelTransform(t0 * r0);
 
-        bitmap.time = time;
+        bitmap.time = time * 0.1;
         bitmap.DrawTrianglesPBR(vertices, indices, &material);
 
-        m4 tf0 = m4::Translation(v3(0, -0.2, offset));
-        m4 sf0 = m4::Scale(v3(0.9, 1, 1));
-        bitmap.SetModelTransform((sf0 * tf0) * r0);
-        bitmap.DrawTriangles(verticesFloor, indicesFloor, &materialFloor);
+        //m4 tf0 = m4::Translation(v3(0, -0.2, 0));
+        //m4 sf0 = m4::Scale(v3(0.9, 1, 1));
+        //bitmap.SetModelTransform((sf0 * tf0) * r0);
+        //bitmap.DrawTriangles(verticesFloor, indicesFloor, &materialFloor);
 
         SDL_UnlockTexture(screenTexture);
 

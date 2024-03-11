@@ -39,7 +39,7 @@ VertexOutput Bitmap::VertexFunctionPBR(Vertex v) {
     tangentTransform.rows[2] = transformedNormal;
     tangentTransform.rows[3] = v4(0, 0, 0, 1);
 
-    v3 lightPosition(-2 + sin(time) * 3, 2, -1);
+    v3 lightPosition(2 + sin(time) * 3, 2, -1);
     v4 lightPositionInTangentSpace = tangentTransform * (lightPosition - output.fragmentPosition);
     output.fragmentLightVector = v3(lightPositionInTangentSpace.x, lightPositionInTangentSpace.y, lightPositionInTangentSpace.z);
 
@@ -157,13 +157,13 @@ v4 Bitmap::sampleCube(v3 vector, BitmapCube* cube){
     r32 v = uv.y * (cube->directions[face].height - 1);
     return cube->directions[face].GetPixel(u, v);
 }
-#if 1
+
 v4 Bitmap::FragmentFunctionPBR(VertexOutput& o, Material* material) {
     v3 position = o.fragmentPosition;
 
     v4 normalSample = sample(o.fragmentUV, &material->normal);
     v3 normal = v3(normalSample.x, normalSample.y, normalSample.z);
-    normal = normal * 2 - 1; //[-1, 1]
+    normal = normal * 2 - 1;
     
     // difuse
     v3 pToL = o.fragmentLightVector;
@@ -189,26 +189,24 @@ v4 Bitmap::FragmentFunctionPBR(VertexOutput& o, Material* material) {
     v4 emissive = sample(o.fragmentUV, &material->emissive);
     //
 
-    // reflection
+    // home made reflection
     v3 fromCamera = -toCamera;
     v3 reflecedFromCamera = Math::Reflect(fromCamera, normal).Normalized();
 
-    v4 roughness = sample(o.fragmentUV, &material->roughness);
-    v4 invroughness = sample(o.fragmentUV, &material->roughness);
-    invroughness.x = 1 - roughness.x;
-    invroughness.y = 1 - roughness.y;
-    invroughness.z = 1 - roughness.z;
-    invroughness.w = 1 - roughness.w;
-
-    v4 reflectedColor = sampleCube(reflecedFromCamera, environment) * invroughness;
+    r32 roughness = sample(o.fragmentUV, &material->roughness).x;
+    r32 invroughness = 1 - roughness;
+    
+    v4 reflectedColor(0, 0, 0, 0);
+    if (invroughness > 0.9) {
+        reflectedColor = sampleCube(reflecedFromCamera, environment);
+    }
     //
 
     v4 ambientOcculion = sample(o.fragmentUV, &material->ambientOcclusion);
-    v4 color = (diffuseColor + reflectedColor + specularColor + emissive) * ambientOcculion;
-
+    v4 color = (diffuseColor + reflectedColor * 0.2 + specularColor + emissive) * ambientOcculion;
+    
     return color;
 }
-#endif
 
 #if 0
 v4 Bitmap::FragmentFunctionPBR(VertexOutput& o, Material* material) {
