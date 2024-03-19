@@ -3,8 +3,8 @@
 This is a software renderer created from scratch(apart from using SDL for window events and ASSIMP for importing the models and animations).
 
 ## Demos
-<img src="gifs/tracer_animation.gif" alt="tracer" width="200"/>
-<img src="gifs/some_monster_animation_normals.gif" alt="something" width="200"/><br>
+<img src="gifs/tracer_animation.gif" alt="tracer" width="400"/>
+<img src="gifs/some_monster_animation_normals.gif" alt="something" width="400"/><br>
 
 ## Features
 - Supports rigged models
