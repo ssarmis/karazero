@@ -92,6 +92,20 @@ struct v3 {
     }
 };
 
+struct v4i {
+    union {
+        struct {
+            i32 x;
+            i32 y;
+            i32 z;
+            i32 w;
+        };
+        i32 m[4];
+    };
+    v4i() :v4i(0, 0, 0, 0) {}
+    v4i(i32 x, i32 y, i32 z, i32 w) :x(x), y(y), z(z), w(w) {}
+};
+
 struct v4 {
     union {
         struct {
@@ -104,6 +118,7 @@ struct v4 {
     };
     v4() = default;
     v4(r32 xx, r32 yy, r32 zz, r32 ww) : x(xx), y(yy), z(zz), w(ww) {}
+    v4(const v3& o) : x(o.x), y(o.y), z(o.z), w(0) {}
 
     r32 Length() {
         return std::sqrt(x * x + y * y + z * z + w * w);
@@ -115,11 +130,14 @@ struct v4 {
     }
 
     static v4 Lerp(v4 a, v4 b, r32 t);
+    static v4 Slerp(v4 a, v4 b, r32 t);
 
     v4 operator/(r32 r) {
         return v4(x / r, y / r, z / r, w / r);
     }
-
+    v4 operator-() {
+        return v4(-x, -y, -z, -w);
+    }
     v4 operator-(v4 b) {
         return v4(x - b.x, y - b.y, z - b.z, w - b.w);
     }
@@ -183,7 +201,10 @@ struct v2 {
 };
 
 struct m3 {
-    r32 m[3 * 3];
+    union {
+        r32 m[3 * 3];
+        v3 rows[3];
+    };
 
     m3() {
         for (int i = 0; i < 3 * 3; ++i) {
@@ -217,8 +238,36 @@ struct m3 {
 
         return result;
     }
-};
+    m3 operator*(m3 n) {
+        m3 result;
+        for (int i = 0; i < 3; ++i) {
+            for (int j = 0; j < 3; ++j) {
+                result.m[j + i * 3] = 0;
+                for (int k = 0; k < 3; ++k) {
+                    result.m[j + i * 3] += m[k + i * 3] * n.m[i + k * 3];
+                }
+            }
+        }
+        return result;
+    }
 
+    v3 operator*(v3 v) {
+        v3 result;
+        for (int i = 0; i < 3; ++i) {
+            result.m[i] = 0;
+            for (int j = 0; j < 3; ++j) {
+                result.m[i] += m[i + j * 3] * v.m[j];
+            }
+        }
+        return result;
+    }
+    v2 operator*(v2 v) {
+        v3 result = *this * v3(v.x, v.y, 0);
+        return v2(result.x, result.y);
+    }
+};
+#include <glm/gtx/quaternion.hpp>
+#include <glm/gtc/type_ptr.hpp>
 struct m4 {
     union {
         struct {
@@ -242,6 +291,85 @@ struct m4 {
         m[1 + 1 * 4] = 1;
         m[2 + 2 * 4] = 1;
         m[3 + 3 * 4] = 1;
+    }
+
+    m4(const m3& other) {
+        rows[0] = other.rows[0];
+        rows[1] = other.rows[1];
+        rows[2] = other.rows[2];
+        rows[3] = v4(0, 0, 0, 1);
+    }
+
+    m4(r32 scale) {
+        for (int i = 0; i < 4 * 4; ++i) {
+            m[i] = 0;
+        }
+
+        m[0 + 0 * 4] = scale;
+        m[1 + 1 * 4] = scale;
+        m[2 + 2 * 4] = scale;
+        m[3 + 3 * 4] = scale;
+    }
+
+    m4(r32 m0, r32 m1, r32 m2, r32 m3,
+        r32 m4, r32 m5, r32 m6, r32 m7,
+        r32 m8, r32 m9, r32 m10, r32 m11,
+        r32 m12, r32 m13, r32 m14, r32 m15) {
+
+        m[0] = m0;
+        m[1] = m1;
+        m[2] = m2;
+        m[3] = m3;
+        m[4] = m4;
+        m[5] = m5;
+        m[6] = m6;
+        m[7] = m7;
+        m[8] = m8;
+        m[9] = m9;
+        m[10] = m10;
+        m[11] = m11;
+        m[12] = m12;
+        m[13] = m13;
+        m[14] = m14;
+        m[15] = m15;
+    }
+
+    m4 Transpose() {
+        m4 result;
+        for (int i = 0; i < 4; ++i) {
+            for (int j = 0; j < 4; ++j) {
+                result.m[j + i * 4] = m[i + j * 4];
+            }
+        }
+        return result;
+    }
+
+    static m4 QuatToMat(v4 q) {
+        v4 qc = q;
+
+        m3 result;
+        q.w = qc.x;
+        q.x = qc.y;
+        q.y = qc.z;
+        q.z = qc.w;
+
+        // secretly glm quaterinion to matrix 
+        r32 qxx = (q.x * q.x);
+        r32 qyy = (q.y * q.y);
+        r32 qzz = (q.z * q.z);
+        r32 qxz = (q.x * q.z);
+        r32 qxy = (q.x * q.y);
+        r32 qyz = (q.y * q.z);
+        r32 qwx = (q.w * q.x);
+        r32 qwy = (q.w * q.y);
+        r32 qwz = (q.w * q.z);
+
+        result.rows[0] = v3(1 - 2 * (qyy + qzz), 2 * (qxy + qwz), 2 * (qxz - qwy));
+        result.rows[1] = v3(2 * (qxy - qwz), 1 - 2 * (qxx + qzz), 2 * (qyz + qwx));
+        result.rows[2] = v3(2 * (qxz + qwy), 2 * (qyz - qwx), 1 - 2 * (qxx + qyy));
+
+        m4 resultM4(result);
+        return resultM4.Transpose();
     }
 
     static m4 Perspective(r32 fov, r32 aspect, r32 near, r32 far) {
@@ -319,7 +447,7 @@ struct m4 {
         return result;
     }
 
-    static m4 Scale(v3 scale){
+    static m4 Scale(v3 scale) {
         m4 result;
 
         result.rows[0] = v4(scale.x, 0, 0, 0);
@@ -339,6 +467,28 @@ struct m4 {
                 for (int k = 0; k < 4; ++k) {
                     result.m[j + i * 4] += m[k + i * 4] * n.m[j + k * 4];
                 }
+            }
+        }
+        return result;
+    }
+
+    m4 operator*(r32 b) {
+        m4 result = {};
+
+        for (int i = 0; i < 4; ++i) {
+            for (int j = 0; j < 4; ++j) {
+                result.m[j + i * 4] = m[j + i * 4] * b;
+            }
+        }
+        return result;
+    }
+
+    m4 operator+(m4 n) {
+        m4 result = {};
+
+        for (int i = 0; i < 4; ++i) {
+            for (int j = 0; j < 4; ++j) {
+                result.m[j + i * 4] = m[j + i * 4] + n.m[j + i * 4];
             }
         }
         return result;

@@ -9,32 +9,29 @@ v4 v4::Lerp(v4 a, v4 b, r32 t) {
     return a * (1.0 - t) + b * t;
 }
 
+v4 v4::Slerp(v4 a, v4 b, r32 t) {
+    r32 cosTheta = Math::Dot(a, b);
+    v4 c = b;
+    if (cosTheta < 0) {
+        c = -b;
+        cosTheta = -cosTheta;
+    }
+
+    if (cosTheta > 1 - 0.000001) {
+        return v4::Lerp(a, c, t);
+    }
+    else {
+        r32 angle = std::acos(cosTheta);
+        r32 invSin = 1 / std::sin(angle);
+        r32 c0 = std::sin((1 - t) * angle) * invSin;
+        r32 c1 = std::sin(t * angle) * invSin;
+
+        return a * c0 + c * c1;
+    }
+}
+
 v2 v2::Lerp(v2 a, v2 b, r32 t) {
     return a * (1.0 - t) + b * t;
-}
-
-m3 operator*(m3 m, m3 n) {
-    m3 result;
-    for (int i = 0; i < 3; ++i) {
-        for (int j = 0; j < 3; ++j) {
-            result.m[j + i * 3] = 0;
-            for (int k = 0; k < 3; ++k) {
-                result.m[j + i * 3] += m.m[k + i * 3] * n.m[i + k * 3];
-            }
-        }
-    }
-    return result;
-}
-
-v3 operator*(m3 m, v3 v) {
-    v3 result;
-    for (int i = 0; i < 3; ++i) {
-        result.m[i] = 0;
-        for (int j = 0; j < 3; ++j) {
-            result.m[i] += m.m[i + j * 3] * v.m[j];
-        }
-    }
-    return result;
 }
 
 std::ostream& operator<<(std::ostream& stream, v4& v) {
@@ -56,16 +53,11 @@ std::ostream& operator<<(std::ostream& stream, m4& m) {
     return stream;
 }
 
-v2 operator*(m3 m, v2 v) {
-    v3 result = m * v3(v.x, v.y, 0);
-    return v2(result.x, result.y);
-}
-
-
 namespace Math {
     r32 Clamp(r32 v, r32 l, r32 h) {
         return v < l ? l : (v > h ? h : v);
     }
+
     v3 NDCToSC(v3 v, r32 width, r32 height) {
         r32 halfWidth = width / 2.0f;
         r32 halfHeight = height / 2.0f;

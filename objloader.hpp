@@ -11,6 +11,7 @@
 class OBJLoader {
 public:
 	static void Load(const std::string& path, std::vector<Vertex>& vertices, std::vector<u32>& indices) {
+#if 0
         objl::Loader loader;
 
         // Load .obj File
@@ -61,5 +62,6 @@ public:
                 vertices[i2].tangent = tangent;
             }
         }
+#endif
 	}
 };

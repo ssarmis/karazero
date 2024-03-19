@@ -50,5 +50,14 @@
     <ClInclude Include="material.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="gltf.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="assimp_wrapper.hpp">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="mesh.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
