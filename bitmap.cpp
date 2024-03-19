@@ -2,7 +2,6 @@
 
 #include "material.hpp"
 #include "math.hpp"
-#include "bitmap_cube.hpp"
 
 VertexOutput Bitmap::VertexFunction(Vertex v) {
     VertexOutput output;

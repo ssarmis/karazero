@@ -12,7 +12,6 @@
 
 #include "objloader.hpp"
 #include "material.hpp"
-#include "bitmap_cube.hpp"
 #include "mesh.hpp"
 #include "assimp_wrapper.hpp"
 
