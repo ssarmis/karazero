@@ -150,7 +150,6 @@ v4 Bitmap::FragmentFunction(VertexOutput& o, Material* materials) {
     v4 ambientOcculion = sample(o.fragmentUV, &material->ambientOcclusion);
     v4 color = (diffuseColor + specularColor + emissive) * ambientOcculion;
     //normal = normal * 0.5 + 0.5;
-    color = diffuseColor;
 
     //v4 color = normal;
 

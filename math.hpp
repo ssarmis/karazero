@@ -266,8 +266,7 @@ struct m3 {
         return v2(result.x, result.y);
     }
 };
-#include <glm/gtx/quaternion.hpp>
-#include <glm/gtc/type_ptr.hpp>
+
 struct m4 {
     union {
         struct {
