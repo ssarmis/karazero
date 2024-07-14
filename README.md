@@ -15,3 +15,5 @@ This is a software renderer created from scratch(apart from using SDL for window
 - Barycentric interpolation of vertices
 - Has a very intuitive and configurable Vertex and Fragment shader
 - Some basic postprocessing effects are possible(bloom, blur, lightpass, mixing)
+
+Created by Streanga Sarmis-Stefan
